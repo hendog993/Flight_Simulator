@@ -13,8 +13,8 @@
                        '--'   OO   O|O   OO   '--'
  * 
  */ 
-
-// TODO figure out what rotary encoder will do. Right now it has no real purpose. - can be input for lat, lon, heading, etc. 
+// TODO test and configure debounced rotary encoder - figure out "menu" options 
+// TODO figure out how to land - how to verify you've grounded after being airborne. 
 // TODO figure out what aircraft criteria to add - stall, going too fast, etc. 
 // TODO major software config - transmit serial data to instrument panel bus to Arduino NANO, which controlls stepper motors for instruments. 
 // TODO instrument design - proof of concept. 
@@ -28,6 +28,7 @@
 // TODO add automated flight controls - hold pitch, hold airspeed, hold altitude, hold heading, etc. 
 // TODO add ternary operators for condensed 
 // TODO formalize input control panel - need something to do master reset so instruments aren't stuck on power down . 
+// TODO refactor const with function input parameters 
 
 #include "Globals.h"
 #include <LiquidCrystal.h>
@@ -48,6 +49,8 @@ typedef struct Frozen_Data_t {
 
     // Digital Data 
     bool     stick_switch ; // joystick switch
+    bool  rot_Encoder_switch ; 
+    
 } Frozen_Data;
 
 Frozen_Data flsim_inputs ;
@@ -77,12 +80,12 @@ typedef struct Aircraft_Situation_t {
     float longitude ; 
     float oat ; 
     float tat ; 
-} Aircraft_Situation ; 
+} Aircraft_Situation ; // TODO should these structs be initialized here ? What is best practice 
 
 Aircraft_Situation aircraft_situation ; 
 
 typedef struct Wind_t {
-   
+    float wind_direction ; 
     int vel_x ;
     int vel_y ; 
 } Wind ; 
@@ -101,8 +104,7 @@ Inputs: Pointer for frozen data
 Outputs: Success or fail 
 Description: Services digital and analog inputs - stores data in appropriate structs. 
 ----------------------------------------------------------------------------------------------*/
-
-int32_t service_frozen_data ( Frozen_Data * frozenPtr )
+int32_t service_frozen_data ( Frozen_Data * const frozenPtr )
 {
     int32_t success = EXIT_FAILURE ;
    
@@ -133,7 +135,6 @@ int32_t service_frozen_data ( Frozen_Data * frozenPtr )
 }
 
 
-
 /*--------------------------------------------------------------------------------------------
 Function: thaw_data
 Inputs: frozen data poiner, thawed data pointer
@@ -141,15 +142,15 @@ Outputs: success or fail code
 Description: calls each subfunction for portion of thawed data that must be serviced and stores values in struct. 
               Heirarchy of Data - acceleration comes first, then pitch, roll, TODO verify this with governing equations . 
 ----------------------------------------------------------------------------------------------*/
-int32_t thaw_data ( Frozen_Data * frozenPtr ,
-                    Thawed_Data * thawedPtr , 
-                    Aircraft_Situation * aircraftSituationPtr )
+int32_t thaw_data ( Frozen_Data * const frozenPtr ,
+                    Thawed_Data * const thawedPtr , 
+                    Aircraft_Situation * const aircraftSituationPtr )
 {
     int32_t success = EXIT_FAILURE ;
   
-    if ( ( frozenPtr == NULL ) ||
-         ( thawedPtr == NULL ) || 
-         ( aircraftSituationPtr == NULL ) ) 
+    if ( ( NULL == frozenPtr ) ||
+         ( NULL == thawedPtr) || 
+         ( NULL == aircraftSituationPtr) ) 
     {
         return success ;  // Error Null Pointers 
     }
@@ -161,7 +162,7 @@ int32_t thaw_data ( Frozen_Data * frozenPtr ,
     success = check_aircraft_situation ( frozenPtr , thawedPtr , aircraftSituationPtr ) ;
     
     // Only perform these calculations if aircraft is airborne 
-    if ( aircraftSituationPtr->airborne_status == true ) 
+    if ( true == aircraftSituationPtr->airborne_status ) 
     { 
         // digitalWrite ( airborne_status_out, HIGH ) ; 
         success = thaw_groundspeed ( frozenPtr , thawedPtr ) ;
@@ -208,8 +209,8 @@ int32_t check_stall_status ( Thawed_Data * thawedPtr ,
 {
     int32_t success = EXIT_FAILURE ; 
 
-    // Must be airborne TODO need a way to get out of stall status 
-    if ( aircraftSituationPtr->airborne_status == true )
+    // Must be airborne  
+    if ( true == aircraftSituationPtr->airborne_status )
     {
         aircraftSituationPtr->stall_status = ( (( thawedPtr->true_airspeed >= STALL_AIRSPEED_MIN ) && (thawedPtr->true_airspeed <= STALL_AIRSPEED_MAX )) && 
                                                (( thawedPtr->pitch >= STALL_PITCH_MIN) && (thawedPtr->pitch <= STALL_PITCH_MAX )) ) ? true : false ;      
@@ -219,10 +220,10 @@ int32_t check_stall_status ( Thawed_Data * thawedPtr ,
 }
 
 /*--------------------------------------------------------------------------------------------
-Function: 
-Inputs:
-Outputs:
-Description:
+Function: check_grounded_status
+Inputs: frozen Pointer , thawed Pointer , aircraft situation pointer 
+Outputs: success or fail 
+Description: 
 ----------------------------------------------------------------------------------------------*/
 int32_t check_grounded_status ( Frozen_Data * frozenPtr ,
                                 Thawed_Data * thawedPtr ,
@@ -230,26 +231,26 @@ int32_t check_grounded_status ( Frozen_Data * frozenPtr ,
 {
     int32_t success = EXIT_FAILURE ; 
     
-    // Check grounded status for takeoff 
+    // Check grounded status while airborne for landing - if you're airborne , 
+    if ( true == aircraftSituationPtr->airborne_status  )
+    {
+        aircraftSituationPtr->airborne_status = ( thawedPtr->altitude <= 0 ) ? false : true ;     // Todo eventually we will have alt set and this will be calculated .        
+    }
+    
+    // Check grounded status for takeoff - airborne if greater than liftoff speed AND the yoke is past threshold: CANT INLINE THIS
     if ( ( thawedPtr->true_airspeed >= LIFTOFF_AIRSPEED ) && 
-         ( frozenPtr->yoke_x > LIFTOFF_YOKE )  
+         ( frozenPtr->yoke_x > LIFTOFF_YOKE_THRESHOLD )  
        )
      {
         aircraftSituationPtr->airborne_status = true ; 
      } 
-
-    // Check groundedd status while airborne for landing 
-    if ( aircraftSituationPtr->airborne_status == true )
-    {
-      //  aircraftSituationPtr->airborne_status = ( thawedPtr->altitude <= 0 ) ? true : false ;     // Todo eventually we will have alt set and this will be calculated .        
-    }
-
+           
     success = EXIT_SUCCESS ; 
     return success ;
 }
 
 /*--------------------------------------------------------------------------------------------
-Function: 
+Function: check_crash_stats
 Inputs:
 Outputs:
 Description:
@@ -258,13 +259,10 @@ int32_t check_crash_stats (Thawed_Data * thawedPtr ,
                            Aircraft_Situation * aircraftSituationPtr) 
 {
     /* crash criteria: landing without landing gear down, landing at  too low of a pitch , landing too fast , landing sideways , trying to land too slow , 
-     * 
      */
     int32_t success = EXIT_FAILURE ; 
 
     // Landing at too low of a pitch 
-
-    
 
     success = EXIT_SUCCESS ; 
     return success ; 
@@ -272,7 +270,7 @@ int32_t check_crash_stats (Thawed_Data * thawedPtr ,
 }
 
 /*--------------------------------------------------------------------------------------------
-Function: 
+Function: service_aircraft_situation_outputs
 Inputs:
 Outputs:
 Description:
@@ -287,7 +285,6 @@ int32_t service_aircraft_situation_outputs ( Aircraft_Situation * aircraftSituat
     success = EXIT_SUCCESS ; 
     return success ; 
 }
-
 
 
 /*--------------------------------------------------------------------------------------------
@@ -310,12 +307,17 @@ Description: calculates the new airspeed based on throttle input. Since there is
                  At max throttle, dV = +10 kts/second
                  At min throttle, dV = -5  kts/second
 ----------------------------------------------------------------------------------------------*/
-int32_t thaw_true_airspeed (Frozen_Data * frozenPtr,  Thawed_Data * thawedPtr )
+/*
+MAX_DELTA_VELOCITY 10 knots per second, .25 knots per calculation 
+float airspeed_fudge_factor = 
+*/
+
+int32_t thaw_true_airspeed (const Frozen_Data * const frozenPtr,  Thawed_Data * const thawedPtr )
 {
     int32_t success = EXIT_FAILURE ;
 
-    if (  ( frozenPtr == NULL ) ||
-          ( thawedPtr == NULL ) ) 
+    if (  ( NULL == frozenPtr ) ||
+          ( NULL == thawedPtr ) ) 
     {
         return success ; // Error - can't have null pointers. TODO necessary because of initial check ? TODO 
     }
@@ -323,7 +325,7 @@ int32_t thaw_true_airspeed (Frozen_Data * frozenPtr,  Thawed_Data * thawedPtr )
     // TODO make these global variables? Are they going to be used elsewhere? Also, possibly make these the general case calculations 
     float new_airspeed ; 
     float old_airspeed = thawedPtr->true_airspeed;
-    float A = 0.00073f;
+    float A = 0.00073f; 
     float D = .25f;
     
     new_airspeed = old_airspeed + (A * frozenPtr->analog_pot - D);   // TODO update this. I don't like adding things directly to a struct if the values aren't right initially 
@@ -331,13 +333,12 @@ int32_t thaw_true_airspeed (Frozen_Data * frozenPtr,  Thawed_Data * thawedPtr )
     // Limit the airspeed between the min 0 and the max 176. 
     // Todo make these inline conditional if with ternary operator 
     if ( new_airspeed > MAX_AIRSPEED ) new_airspeed = MAX_AIRSPEED ; 
-    if  (new_airspeed < 0 ) new_airspeed = 0 ; 
+    if ( new_airspeed < 0 ) new_airspeed = 0 ; 
 
     thawedPtr->true_airspeed  = new_airspeed ; 
     success = EXIT_SUCCESS ; // Exit success 
     return success ;
 }
-
 
 /*---------------------------------------------------------------------------------------
 Function: thaw_groundspeed  
@@ -349,8 +350,8 @@ int32_t thaw_groundspeed ( Frozen_Data * frozenPtr,  Thawed_Data * thawedPtr )
 {
     int32_t success = EXIT_FAILURE ;
     
-    if (  ( frozenPtr == NULL ) ||
-          ( thawedPtr == NULL ) ) 
+    if (  ( NULL == frozenPtr  ) ||
+          ( NULL == thawedPtr) ) 
     {
         return success ; // Error - can't have null pointers. TODO necessary because of initial check ? TODO 
     }
@@ -362,9 +363,7 @@ int32_t thaw_groundspeed ( Frozen_Data * frozenPtr,  Thawed_Data * thawedPtr )
     
     return success ;
 }
-
-
-
+ 
 /*---------------------------------------------------------------------------------------
 Function: thaw_pitch 
 Inputs: frozen data pointer , thawed data pointer 
@@ -382,7 +381,7 @@ int32_t thaw_pitch ( Frozen_Data * frozenPtr,  Thawed_Data * thawedPtr  )
     float A = 0.0002020f ; // TODO remove magic numbers , 
     int16_t yoke_reading = frozenPtr->yoke_x ; 
     
-    new_pitch = old_pitch + (A * (yoke_reading - 528) );   // TODO update this. I don't like adding things directly to a struct if the values aren't right initially, also magic number. 
+    new_pitch = old_pitch + (A * ( yoke_reading - YOKE_X_READING_RTZ_OFFSET) );  
 
     if ( new_pitch > MAX_PITCH ) new_pitch = MAX_PITCH ; 
     if ( new_pitch < MIN_PITCH ) new_pitch = MIN_PITCH ; 
@@ -408,10 +407,9 @@ int32_t thaw_roll ( Frozen_Data * frozenPtr,  Thawed_Data * thawedPtr )
     float A = -0.0004f ;
     int16_t yoke_reading = frozenPtr->yoke_y ; 
     
-    new_roll = old_roll + (A * (yoke_reading - 512) );   // TODO update this. I don't like adding things directly to a struct if the values aren't right initially 
-
-    if ( new_roll > MAX_PITCH ) new_roll = MAX_ROLL ; 
-    if ( new_roll < MIN_PITCH ) new_roll = MIN_ROLL ; 
+    new_roll = old_roll + (A * (yoke_reading - YOKE_Y_READING_RTZ_OFFSET) );   
+    if ( new_roll > MAX_ROLL ) new_roll = MAX_ROLL ; 
+    if ( new_roll < MIN_ROLL ) new_roll = MIN_ROLL ; 
 
     thawedPtr->roll  = new_roll ; 
     
@@ -435,14 +433,14 @@ Outputs: exit status code
 Description:
 ----------------------------------------------------------------------------------------------*/
 // TODO throw warning if altitude becomes too high - figure out soft limit and critical limit 
-int32_t thaw_altitude ( Frozen_Data * frozenPtr,  Thawed_Data * thawedPtr )
+int32_t thaw_altitude ( Frozen_Data * const frozenPtr,  Thawed_Data * thawedPtr )
 {
     int32_t success = EXIT_FAILURE ;
 
     float new_altitude ; 
     float old_altitude = thawedPtr->altitude ; 
     
-    new_altitude = old_altitude + ( thawedPtr->true_airspeed * sin ( radians ( thawedPtr ->pitch ) ) )/20 ;
+    new_altitude = old_altitude + ( thawedPtr->true_airspeed * sin ( radians ( thawedPtr ->pitch ) ) )/ 20 ;
 
     // Serial.println(new_altitude - old_altitude);
     thawedPtr->altitude = new_altitude ; 
@@ -457,7 +455,7 @@ Inputs:
 Outputs:
 Description:
 ----------------------------------------------------------------------------------------------*/
-int32_t thaw_rate_of_climb (Frozen_Data * frozenPtr,  Thawed_Data * thawedPtr ) 
+int32_t thaw_rate_of_climb (Frozen_Data * const frozenPtr,  Thawed_Data * thawedPtr ) 
 {
     int32_t success = EXIT_FAILURE ;
     thawedPtr->rate_of_climb = thawedPtr->true_airspeed * sin( radians ( thawedPtr -> pitch ) ) ; 
@@ -473,7 +471,7 @@ Outputs:
 Description:
 ----------------------------------------------------------------------------------------------*/
 
-int32_t thaw_heading ( Frozen_Data * frozenPtr,  Thawed_Data * thawedPtr )
+int32_t thaw_heading ( Frozen_Data * const frozenPtr,  Thawed_Data * thawedPtr )
 {
     int32_t success = EXIT_FAILURE ;
 
@@ -489,7 +487,7 @@ Outputs:
 Description:
 ----------------------------------------------------------------------------------------------*/
 
-int32_t thaw_yaw ( Frozen_Data * frozenPtr,  Thawed_Data * thawedPtr )
+int32_t thaw_yaw ( Frozen_Data * const frozenPtr,  Thawed_Data * thawedPtr )
 {
     int32_t success = EXIT_FAILURE ;
 
@@ -502,29 +500,53 @@ int32_t thaw_yaw ( Frozen_Data * frozenPtr,  Thawed_Data * thawedPtr )
 
 /*--------------------------------------------------------------------------------------------
 Function: service_rotary_encoder
-Inputs: Pointer to global counter variable 
-Outputs: Failure code / status 
+Inputs:  
+Outputs:  
 Description: Increments/decrements the counter based on the turn conditions of the encoder. 
 ----------------------------------------------------------------------------------------------*/
-int32_t service_rotary_encoder ( byte * counter  ) {
-    
+volatile int32_t rotEnc_counter ; 
+uint32_t rotEncVector;
+int32_t service_rotary_encoder ()
+{
+    int32_t counts = 0;
+    rotEncVector = ( rotEncVector << 2u ) & 0xCu ; // Preserve old A,B as A',B'
+     // Read encoder inputs 
+    rotEncVector |= ( digitalRead ( rotEnc_dt ) ) ? 2 : 0 ;
+    rotEncVector |= ( digitalRead ( rotEnc_clk ) ) ? 1 : 0 ;
+    //Serial.println(rotEncVector);
+
+    switch ( rotEncVector )
+    {
+      /* 13-4-2-11 Order. All clockwise directions  */
+      case 0b1101:
+      case 0b0100:
+      case 0b0010:
+      case 0b1011:
+          counts = 1;
+          break;
+
+      /* 14-8-1-7 Order : All counterclockwise directions */
+      case 0b1110:
+      case 0b1000:  
+      case 0b0001:  
+      case 0b0111:      
+          counts = -1;
+          break;
+      default:
+          break;
+    }
+    rotEnc_counter += counts ; 
+    Serial.println(rotEnc_counter);
 }
-
+ 
 // ==================== END FUNCTION DECLARATIONS ==================
-
-
-
-
-
-
 
 // ==================== DEBUG FUNCTIONS ======================
 
-/*
-*   Function : read_frozen_struct 
-*   Description : debug function - prints data 
+/* Function : read_frozen_struct 
+*  Description : debug function - prints data 
 */
-void read_frozen_struct ( Frozen_Data * frozenPtr ) 
+void read_frozen_struct ( const Frozen_Data * const frozenPtr ) 
 {
     Serial.print ( "Yoke X: ") ;
     Serial.print ( frozenPtr->yoke_x ) ;
@@ -563,7 +585,9 @@ void print_raw_inputs ()
     Serial.print ( "\n " ) ;
 }
 
-void print_thawed_data ( Frozen_Data * frozenPtr  , Thawed_Data * thawedPtr,Aircraft_Situation * aircraftSituationPtr  ) 
+void print_thawed_data ( const Frozen_Data * const frozenPtr , 
+                         const Thawed_Data * const thawedPtr ,
+                         const Aircraft_Situation * const aircraftSituationPtr ) 
 {
     Serial.print ( "Airspeed : ") ; 
     Serial.print ( thawedPtr->true_airspeed ) ;
@@ -579,16 +603,7 @@ void print_thawed_data ( Frozen_Data * frozenPtr  , Thawed_Data * thawedPtr,Airc
     Serial.print ( thawedPtr->altitude ) ;
     Serial.print ( "\n" ) ; 
 }
-
-
 // ==================== END DEBUG FUNCTIONS ======================
-
-
-
-
-
-
-
 
 
 // =================== MAIN FUNCTIONS  ====================
@@ -597,17 +612,12 @@ void print_thawed_data ( Frozen_Data * frozenPtr  , Thawed_Data * thawedPtr,Airc
 // Timer Variables // 
 unsigned long startMillis;  //some global variables available anywhere in the program
 unsigned long currentMillis;
-const unsigned long period = 50;  //the value is a number of milliseconds
 int32_t error_code ; 
 byte time_diff ; 
-byte rotEnc_count ; 
-
-#define NUM_ROWS_LCD 2
-#define NUM_COLUMNS_LCD 16 
 
 void setup() {
     // set up the LCD's number of columns and rows:
-    Serial.begin( 74880 );
+    Serial.begin( 115200 );
     lcd.begin( NUM_COLUMNS_LCD, NUM_ROWS_LCD );
 
     // Joy stick inputs 
@@ -621,9 +631,9 @@ void setup() {
     pinMode ( stall_warning_out , OUTPUT ) ; 
     
     // Rotary Encoder inputs 
-    pinMode( rotEnc_dt, INPUT_PULLUP );
-    pinMode( rotEnc_clk, INPUT_PULLUP );
-    pinMode ( rotEnc_sw, INPUT_PULLUP ) ;
+    pinMode( rotEnc_dt, INPUT );
+    pinMode( rotEnc_clk, INPUT );
+    pinMode ( rotEnc_sw, INPUT ) ;
 
     // Rotary Encoder interrupt routines
     attachInterrupt( digitalPinToInterrupt( rotEnc_dt ) , service_rotary_encoder , CHANGE );
@@ -631,7 +641,6 @@ void setup() {
 
     /* Pin Mode for Clock */
     pinMode( clock_status_out, OUTPUT );
- 
     startMillis = millis();
 }
 
@@ -641,8 +650,8 @@ void loop() {
     {
         lcd.setCursor(0,0);
         time_diff  = currentMillis - startMillis ;
-        Serial.print ( time_diff ) ; 
-        Serial.print ( ":   " ) ;
+        //Serial.print ( time_diff ) ; 
+        // Serial.print ( ":  " ) ;
         
         // ================= BEGIN MAIN EXECUTION CODE  ====================== 
         digitalWrite(clock_status_out, !digitalRead(clock_status_out));  // Display the state of the timer - leave for debug purposes 
