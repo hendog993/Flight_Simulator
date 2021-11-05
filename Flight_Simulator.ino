@@ -1,6 +1,6 @@
 /*                        FLIGHT SIMULATOR PROJECT 
  *                        Authors : Henry Gilbert and Kolby Baas
- *                        Date    : 10/1/2021                        asdf
+ *                        Date    : 10/1/2021                        
                                     |
                                     |
                                     |
@@ -185,9 +185,9 @@ Inputs:
 Outputs:
 Description:   All subroutines here will be check_XXXX_status 
 ----------------------------------------------------------------------------------------------*/
-int32_t check_aircraft_situation (  Frozen_Data * frozenPtr ,
-                                    Thawed_Data * thawedPtr , 
-                                    Aircraft_Situation * aircraftSituationPtr ) 
+int32_t check_aircraft_situation (  Frozen_Data * const frozenPtr ,
+                                    Thawed_Data * const thawedPtr , 
+                                    Aircraft_Situation * const aircraftSituationPtr ) 
 {
     int32_t success = EXIT_FAILURE ;
   
@@ -204,8 +204,8 @@ Outputs:
 Description: Stall the aircraft is BOTH pMin< pitch < pMAX AND tasMIN < true airspeed < tasMAX 
              TODO this will eventually be calculated with drag coefficient 
 ----------------------------------------------------------------------------------------------*/
-int32_t check_stall_status ( Thawed_Data * thawedPtr , 
-                             Aircraft_Situation * aircraftSituationPtr ) 
+int32_t check_stall_status ( const Thawed_Data * const thawedPtr , 
+                             Aircraft_Situation * const aircraftSituationPtr ) 
 {
     int32_t success = EXIT_FAILURE ; 
 
@@ -225,9 +225,9 @@ Inputs: frozen Pointer , thawed Pointer , aircraft situation pointer
 Outputs: success or fail 
 Description: 
 ----------------------------------------------------------------------------------------------*/
-int32_t check_grounded_status ( Frozen_Data * frozenPtr ,
-                                Thawed_Data * thawedPtr ,
-                                Aircraft_Situation * aircraftSituationPtr ) 
+int32_t check_grounded_status ( const Frozen_Data * const frozenPtr ,
+                                const Thawed_Data * const thawedPtr ,
+                                Aircraft_Situation * const aircraftSituationPtr ) 
 {
     int32_t success = EXIT_FAILURE ; 
     
@@ -255,8 +255,8 @@ Inputs:
 Outputs:
 Description:
 ----------------------------------------------------------------------------------------------*/
-int32_t check_crash_stats (Thawed_Data * thawedPtr ,
-                           Aircraft_Situation * aircraftSituationPtr) 
+int32_t check_crash_stats ( const Thawed_Data * const thawedPtr ,
+                            Aircraft_Situation * const aircraftSituationPtr) 
 {
     /* crash criteria: landing without landing gear down, landing at  too low of a pitch , landing too fast , landing sideways , trying to land too slow , 
      */
@@ -275,7 +275,7 @@ Inputs:
 Outputs:
 Description:
 ----------------------------------------------------------------------------------------------*/
-int32_t service_aircraft_situation_outputs ( Aircraft_Situation * aircraftSituationPtr  ) 
+int32_t service_aircraft_situation_outputs ( const Aircraft_Situation * const aircraftSituationPtr  ) 
 {
     int32_t success = EXIT_FAILURE ; 
     
@@ -346,8 +346,8 @@ Inputs: frozen data pointer , thawed data pointer
 Outputs: error code 
 Description:  calculates groundspeed as a function of airspeed - cos of pitch X true airspeed 
 ----------------------------------------------------------------------------------------------*/
-int32_t thaw_groundspeed ( Frozen_Data * frozenPtr,  Thawed_Data * thawedPtr ) 
-{
+int32_t thaw_groundspeed ( Frozen_Data * const frozenPtr,  Thawed_Data * const thawedPtr ) 
+{   // TODO remove frozen pointer input , it isn't used.
     int32_t success = EXIT_FAILURE ;
     
     if (  ( NULL == frozenPtr  ) ||
@@ -372,7 +372,7 @@ Description:  Thaws pitch based on true airspeed and grounded status . Max rate 
               dP = A * (yoke_reading-528 )    Yoke reading-528 is necessary to offset the joystick initial value
               At max dP,  2  = A * (1024 - 528 ) A equals 0.0002020.  
 ----------------------------------------------------------------------------------------------*/
-int32_t thaw_pitch ( Frozen_Data * frozenPtr,  Thawed_Data * thawedPtr  )
+int32_t thaw_pitch ( const Frozen_Data * const frozenPtr,  Thawed_Data * const thawedPtr  )
 {
     int32_t success = EXIT_FAILURE ;
 
@@ -399,7 +399,7 @@ Outputs: error code
 Description:  Max roll delta is 2 degrees per second . 
 ----------------------------------------------------------------------------------------------*/
 // NOTE : positive roll means, as a pilot, turning clockwise 
-int32_t thaw_roll ( Frozen_Data * frozenPtr,  Thawed_Data * thawedPtr )
+int32_t thaw_roll ( const Frozen_Data * const frozenPtr,  Thawed_Data * const thawedPtr )
 {
     int32_t success = EXIT_FAILURE ;
     double new_roll ; 
@@ -433,7 +433,7 @@ Outputs: exit status code
 Description:
 ----------------------------------------------------------------------------------------------*/
 // TODO throw warning if altitude becomes too high - figure out soft limit and critical limit 
-int32_t thaw_altitude ( Frozen_Data * const frozenPtr,  Thawed_Data * thawedPtr )
+int32_t thaw_altitude ( const Frozen_Data * const frozenPtr,  Thawed_Data * const thawedPtr )
 {
     int32_t success = EXIT_FAILURE ;
 
@@ -455,8 +455,8 @@ Inputs:
 Outputs:
 Description:
 ----------------------------------------------------------------------------------------------*/
-int32_t thaw_rate_of_climb (Frozen_Data * const frozenPtr,  Thawed_Data * thawedPtr ) 
-{
+int32_t thaw_rate_of_climb (Frozen_Data * const frozenPtr,  Thawed_Data * const thawedPtr ) 
+{   // TODO remove frozen pointer, is unused.
     int32_t success = EXIT_FAILURE ;
     thawedPtr->rate_of_climb = thawedPtr->true_airspeed * sin( radians ( thawedPtr -> pitch ) ) ; 
     success = EXIT_SUCCESS ; 
@@ -471,7 +471,7 @@ Outputs:
 Description:
 ----------------------------------------------------------------------------------------------*/
 
-int32_t thaw_heading ( Frozen_Data * const frozenPtr,  Thawed_Data * thawedPtr )
+int32_t thaw_heading ( Frozen_Data * const frozenPtr,  Thawed_Data * const thawedPtr )
 {
     int32_t success = EXIT_FAILURE ;
 
@@ -487,7 +487,7 @@ Outputs:
 Description:
 ----------------------------------------------------------------------------------------------*/
 
-int32_t thaw_yaw ( Frozen_Data * const frozenPtr,  Thawed_Data * thawedPtr )
+int32_t thaw_yaw ( const Frozen_Data * const frozenPtr,  Thawed_Data * const thawedPtr )
 {
     int32_t success = EXIT_FAILURE ;
 
