@@ -7,8 +7,8 @@ from FlightDynamics import FlightForces
 
 class FlightSim:
 
-    def __init__(self):
-        self.flight_force1 = FlightForces()
+    def __init__(self, flight_forces):
+        self.flight_force1 = flight_forces
 
     def velocity_vs_lift_force(self):
 
@@ -23,8 +23,10 @@ class FlightSim:
 
 def main():
 
-    flight_study1 = FlightSim()
-    flight_study1.velocity_vs_lift_force()
+    flight_force1 = FlightForces()
+    flight_study1 = FlightSim(flight_force1)
+    flight_force1.test_sequence1(2700)
+    print("x")
 
 
 if __name__ == "__main__":
