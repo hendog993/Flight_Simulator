@@ -28,11 +28,11 @@ class FlightForces:
     Chord = 1.56  # Chord Length (m)
     WingSpan = 11  # Length of wings (m)
     Area = WingSpan * Chord  # Wing Area (m^2)
-    WeightForce =  g * mass  # W = mg (N) WeightForce < Lift Force = LiftOff (acting downward in - direction)
+    WeightForce = g * mass  # W = mg (N) WeightForce < Lift Force = LiftOff (acting downward in - direction)
     NormalForce_at_GroundLevel = - WeightForce  # The normal force of the ground acting on the aircraft (flip signs)
     GroundLevel = 0.0  # Altitude value in meters on the ground (m)
     LiftOffForce = WeightForce
-    program_counter = 0  # Program counter
+    program_counter = 0
     program_size = 100  # Iterations of Calculation
 
     def __init__(self):
@@ -65,7 +65,10 @@ class FlightForces:
 
     def compute_velocity_h(self, x):
         self.velocity_H[x] = self.previous_velocity_H[x] + self.Acceleration_H[x] * self.time_step  # Todo add wind effects
-        self.previous_velocity_H[x+1] = self.velocity_H[x]
+        if self.program_counter == self.program_size:
+            self.previous_velocity_H[x] = self.velocity_H[x]
+        else:
+            self.previous_velocity_H[x + 1] = self.velocity_H[x]
         return None
 
     def compute_dynamic_pressure(self, x):
@@ -96,7 +99,6 @@ class FlightForces:
         self.DragForce[x] = self.DynamicPressure[x] * self.Area * coefficient_of_drag
         return None
 
-
     def compute_altitude(self, x):
         if self.LiftForce[x] > self.WeightForce:
             self.Acceleration_V[x] = (self.LiftForce[x] - self.WeightForce) / self.mass
@@ -111,7 +113,7 @@ class FlightForces:
             self.change_in_altitude[x] = self.velocity_V[x] * self.time_step + (0.5 * self.Acceleration_V[x] * self.time_step**2)
             self.altitude[x] = self.previous_altitude[x] - self.change_in_altitude[x]
 
-        elif self.LiftForce == self.WeightForce:
+        elif self.LiftForce[x] == self.WeightForce:
             self.Acceleration_V[x] = 0.0
             self.altitude[x] = self.previous_altitude[x]
 
@@ -123,7 +125,6 @@ class FlightForces:
         return None
 
     def test_sequence1(self, rpm):
-
 
         #  Initialize variables
         self.RPM = np.full([self.program_size], rpm)
@@ -152,7 +153,6 @@ class FlightForces:
             else:
                 self.time[self.program_counter] = self.time_step + self.time[self.program_counter - 1]
             self.program_counter += self.program_step
-
 
     def compute_all_forces(self, x):
         self.compute_thrust_force(x)

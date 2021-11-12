@@ -12,10 +12,10 @@ class FlightSim:
 
     def velocity_vs_altitude(self):
 
-        pt.plot(self.flight_force1.velocity_H, 'bo', self.flight_force1.altitude)
-        fig, ax = pt.subplots()
-        ax.plot(self.flight_force1.time, self.flight_force1.velocity_H)
-        ax.plot(self.flight_force1.time, self.flight_force1.altitude)
+        self.flight_force1.time[self.flight_force1.program_size-1] = self.flight_force1.time[self.flight_force1.program_size-2]
+        self.flight_force1.altitude[self.flight_force1.program_size - 1] = self.flight_force1.altitude[
+            self.flight_force1.program_size - 2]
+        pt.plot(self.flight_force1.time, self.flight_force1.altitude)
         pt.xlabel("Velocity (m/s) ")
         pt.ylabel("Altitude (m) ")
         pt.show()
