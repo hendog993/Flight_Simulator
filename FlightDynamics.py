@@ -1,6 +1,6 @@
 import math as m
 import numpy as np
-import matplotlib.pyplot as pt
+#import matplotlib.pyplot as pt
 
 '''
 Henry notes:
@@ -28,7 +28,9 @@ class FlightForces:
     Chord = 1.56  # Chord Length (m)
     WingSpan = 11  # Length of wings (m)
     Area = WingSpan * Chord  # Wing Area (m^2)
-    WeightForce = g * mass  # W = mg (N) WeightForce < Lift Force = LiftOff
+    WeightForce =  g * mass  # W = mg (N) WeightForce < Lift Force = LiftOff (acting downward in - direction)
+    NormalForce_at_GroundLevel = - WeightForce  # The normal force of the ground acting on the aircraft (flip signs)
+    GroundLevel = 0.0  # Altitude value in meters on the ground (m)
     LiftOffForce = WeightForce
     program_counter = 0  # Program counter
     program_size = 100  # Iterations of Calculation
@@ -61,32 +63,10 @@ class FlightForces:
         self.Acceleration_H[x] = self.ThrustForce[x] / self.mass
         return None
 
-    def compute_velocity(self, x):
+    def compute_velocity_h(self, x):
         self.velocity_H[x] = self.previous_velocity_H[x] + self.Acceleration_H[x] * self.time_step  # Todo add wind effects
-        self.velocity_V[x] = self.previous_velocity_V[x] + self.Acceleration_V[x] * self.time_step
-        self.previous_velocity_V[x+1] = self.velocity_V[x]
         self.previous_velocity_H[x+1] = self.velocity_H[x]
         return None
-
-    def compute_altitude(self, x):
-        if self.LiftForce[x] > self.WeightForce:
-            self.Acceleration_V[x] = (self.LiftForce[x] - self.WeightForce) / self.mass
-            change_in_altitude = self.velocity_V[x] * self.time[x] + (0.5 * self.Acceleration_V[x] * self.time[x]**2)
-            self.altitude[x] = self.previous_altitude[x-1] + self.change_in_altitude[x]
-
-        #elif self.LiftForce[x] < self.WeightForce and self.altitude[x] <= 0.0:
-        #    self.altitude[x] = 0
-
-        elif self.LiftForce[x] < self.WeightForce:
-            self.Acceleration_V[x] = (self.WeightForce - self.LiftForce[x]) / self.mass
-            self.change_in_altitude[x] = self.velocity_V[x] * self.time_step + (0.5 * self.Acceleration_V[x] * self.time_step**2)
-            self.altitude[x] = self.previous_altitude[x] - self.change_in_altitude[x]
-
-        else:
-            Acceleration_V = 0
-            self.altitude[x] = self.previous_altitude[x]
-
-        self.previous_altitude[x+1] = self.altitude[x]
 
     def compute_dynamic_pressure(self, x):
         air_pressure = self.PressureAtSeaLevel * (1 - (2.25577 * 10 ** -5) * self.altitude[x]) ** 5.25588
@@ -114,6 +94,32 @@ class FlightForces:
                                   (8.78 * 10 ** -4) * (self.AngleOfAttack[x] ** 2) + (
                                               4.38 * 10 ** -3) * self.AngleOfAttack[x] + 0.0169
         self.DragForce[x] = self.DynamicPressure[x] * self.Area * coefficient_of_drag
+        return None
+
+
+    def compute_altitude(self, x):
+        if self.LiftForce[x] > self.WeightForce:
+            self.Acceleration_V[x] = (self.LiftForce[x] - self.WeightForce) / self.mass
+            self.change_in_altitude[x] = self.velocity_V[x] * self.time_step + (0.5 * self.Acceleration_V[x] * self.time_step**2)
+            self.altitude[x] = self.previous_altitude[x] + self.change_in_altitude[x]
+
+        elif self.LiftForce[x] < self.WeightForce and self.altitude[x] == self.GroundLevel:
+            self.Acceleration_V[x] = 0.0
+
+        elif self.LiftForce[x] < self.WeightForce:
+            self.Acceleration_V[x] = (self.WeightForce - self.LiftForce[x]) / self.mass
+            self.change_in_altitude[x] = self.velocity_V[x] * self.time_step + (0.5 * self.Acceleration_V[x] * self.time_step**2)
+            self.altitude[x] = self.previous_altitude[x] - self.change_in_altitude[x]
+
+        elif self.LiftForce == self.WeightForce:
+            self.Acceleration_V[x] = 0.0
+            self.altitude[x] = self.previous_altitude[x]
+
+        self.previous_altitude[x+1] = self.altitude[x]
+
+    def compute_velocity_v(self, x):
+        self.velocity_V[x] = self.previous_velocity_V[x] + self.Acceleration_V[x] * self.time_step
+        self.previous_velocity_V[x+1] = self.velocity_V[x]
         return None
 
     def test_sequence1(self, rpm):
@@ -150,11 +156,13 @@ class FlightForces:
 
     def compute_all_forces(self, x):
         self.compute_thrust_force(x)
-        self.compute_velocity(x)
+        self.compute_velocity_h(x)
+        self.compute_dynamic_pressure(x)
         self.compute_lift_force(x)
         self.compute_drag_force(x)
         self.compute_altitude(x)
-        self.compute_dynamic_pressure(x)
+        self.compute_velocity_v(x)
+
 
 
 
